@@ -1,5 +1,7 @@
 package edu.technopolis.advancedjava;
 
+import com.sun.xml.internal.fastinfoset.tools.FI_SAX_Or_XML_SAX_DOM_SAX_SAXEvent;
+
 public class Deadlock {
     private static final Object FIRST_LOCK = new Object();
     private static final Object SECOND_LOCK = new Object();
@@ -18,6 +20,9 @@ public class Deadlock {
         synchronized(FIRST_LOCK) {
             //insert some code here to guarantee a deadlock
             synchronized(SECOND_LOCK) {
+                try {
+                    SECOND_LOCK.wait();
+                } catch (InterruptedException e) {}
                 //unreachable point
             }
         }
@@ -31,6 +36,7 @@ public class Deadlock {
         }
         //reverse order of monitors
         synchronized(SECOND_LOCK) {
+            SECOND_LOCK.notifyAll();
             //insert some code here to guarantee a deadlock
             synchronized(FIRST_LOCK) {
                 //unreachable point
