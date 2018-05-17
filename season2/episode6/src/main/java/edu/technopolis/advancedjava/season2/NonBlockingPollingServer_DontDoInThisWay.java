@@ -7,7 +7,7 @@ import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.util.HashMap;
 
-import jdk.internal.jline.internal.Nullable;
+//import jdk.internal.jline.internal.Nullable;
 
 /**
  * Пример неудачной реализации сервера на nio.
@@ -21,7 +21,7 @@ public class NonBlockingPollingServer_DontDoInThisWay {
         HashMap<SocketChannel, ByteBuffer> map = new HashMap<>();
         try (ServerSocketChannel open = openAndBind()) {
             while (true) {
-                @Nullable
+//                @Nullable
                 SocketChannel accept = open.accept(); //не блокируется, почти всегда null
                 if (accept != null) {
                     accept.configureBlocking(false);
