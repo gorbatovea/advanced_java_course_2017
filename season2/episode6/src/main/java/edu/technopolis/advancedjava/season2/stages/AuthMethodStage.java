@@ -2,7 +2,10 @@ package edu.technopolis.advancedjava.season2.stages;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
+import java.util.Map;
 
 public class AuthMethodStage implements IStage {
     public static int CONST_BUFFER_SIZE = 2;
@@ -24,7 +27,7 @@ public class AuthMethodStage implements IStage {
     }
 
     @Override
-    public IStage proceed() {
+    public IStage proceed(Selector selector, Map<SocketChannel, IStage> map) {
         try {
             sourceChannel.read(constBuffer);
             if (constBuffer.position() != constBuffer.limit())
@@ -45,7 +48,10 @@ public class AuthMethodStage implements IStage {
             for (byte b :
                     offeredMethods.array()) {
                 if (b == AUTH_ACCEPTABLE_METHOD) {
+                    System.out.println("Auth completed for " + sourceChannel.getRemoteAddress());
                     sendAccept();
+                    sourceChannel.register(selector, SelectionKey.OP_READ);
+                    map.put(sourceChannel, new ConnectionStage(sourceChannel));
                     return new ConnectionStage(sourceChannel);
                 }
             }

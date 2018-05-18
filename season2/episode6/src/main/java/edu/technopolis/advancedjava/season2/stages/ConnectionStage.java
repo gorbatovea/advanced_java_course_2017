@@ -2,12 +2,13 @@ package edu.technopolis.advancedjava.season2.stages;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.net.ServerSocket;
-import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
 import java.util.Arrays;
+import java.util.Map;
 
 public class ConnectionStage implements IStage {
     public static final int CONST_BUFFER_SIZE = 4;
@@ -47,7 +48,7 @@ public class ConnectionStage implements IStage {
     }
 
     @Override
-    public IStage proceed() {
+    public IStage proceed(Selector selector, Map<SocketChannel, IStage> map) {
         try {
             sourceChannel.read(constBuffer);
             if (constBuffer.position() != constBuffer.limit())
@@ -77,11 +78,15 @@ public class ConnectionStage implements IStage {
             }
             distChannel.finishConnect();
             if (!distChannel.isConnected()){
+                distChannel.register(selector, SelectionKey.OP_CONNECT);
+                map.put(distChannel, this);
                 return this;
             }
-
-            System.out.print("Connected: ");
-            System.out.println(getAddress(addressBuffer.array()) + ":" + getPort(portBuffer.array()));
+            sourceChannel.register(selector, SelectionKey.OP_READ);
+            map.put(sourceChannel, new CommunicationStage(sourceChannel, distChannel));
+            distChannel.register(selector, SelectionKey.OP_READ);
+            map.put(distChannel, new CommunicationStage(sourceChannel, distChannel));
+            System.out.println("Connected " + distChannel.getRemoteAddress());
 
             sendAccept();
             return new CommunicationStage(sourceChannel, distChannel);
