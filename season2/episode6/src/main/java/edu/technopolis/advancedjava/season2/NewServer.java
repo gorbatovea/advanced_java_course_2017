@@ -50,17 +50,15 @@ public class NewServer {
                     if (key.isAcceptable()) {
                         return accept(map, key);
                     }
-                    if (key.isWritable()) {
+                    if (key.isReadable() || key.isConnectable()) {
                         //Внимание!!!
                         //Важно, чтобы при обработке не было долгоиграющих (например, блокирующих операций),
                         //поскольку текущий поток занимается диспетчеризацией каналов и должен быть всегда доступен
-                        IStage stage = map.get(key.channel()).proceed();
+                        IStage stage = map.get(key.channel()).proceed(selector, map);
                         if (stage == null) {
                             closeChannel((SocketChannel) key.channel());
                             return true;
                         }
-                        map.put((SocketChannel) key.channel(), stage);
-                        key.interestOps(SelectionKey.OP_WRITE);
                         return true;
                     }
                     return true;
@@ -82,7 +80,7 @@ public class NewServer {
             channel = serverChannel.accept(); //non-blocking call
             System.out.print(channel.getRemoteAddress());
             channel.configureBlocking(false);
-            channel.register(key.selector(), SelectionKey.OP_WRITE);
+            channel.register(key.selector(), SelectionKey.OP_READ);
             map.put(channel, new AuthMethodStage(channel));
             System.out.println(" is accepted");
         } catch (IOException e) {
