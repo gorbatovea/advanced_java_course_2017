@@ -11,12 +11,10 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
-import com.sun.istack.internal.NotNull;
-import com.sun.scenario.effect.impl.sw.sse.SSEBlend_SRC_OUTPeer;
-import edu.technopolis.advancedjava.season2.stages.AuthMethodStage;
-import edu.technopolis.advancedjava.season2.stages.CommunicationStage;
-import edu.technopolis.advancedjava.season2.stages.ConnectionStage;
+import edu.technopolis.advancedjava.season2.stages.AuthMethodReadStage;
 import edu.technopolis.advancedjava.season2.stages.IStage;
+
+import static edu.technopolis.advancedjava.season2.stages.Utils.BUFFER_SIZE;
 
 /**
  * Сервер, построенный на API java.nio.* . Работает единственный поток,
@@ -28,63 +26,64 @@ public class NewServer {
     private static final int PORT = 1080;
 
     public static void main(String[] args) {
-        Map<SocketChannel, IStage> map = new HashMap<>();
+        Map<SocketChannel, IStage> stages = new HashMap<>();
+
         try (ServerSocketChannel serverChannel = ServerSocketChannel.open();
              Selector selector = Selector.open()){
             serverChannel.configureBlocking(false);
             serverChannel.bind(new InetSocketAddress(PORT));
             serverChannel.register(selector, SelectionKey.OP_ACCEPT);
             while (true) {
-                selector.select(); //блокирующий вызов
-                @NotNull
+                selector.select();
                 Set<SelectionKey> keys = selector.selectedKeys();
                 if (keys.isEmpty()) {
                     continue;
                 }
-                //при обработке ключей из множества selected, необходимо обязательно очищать множество.
-                //иначе те же ключи могут быть обработаны снова
                 keys.removeIf(key -> {
                     if (!key.isValid()) {
                         return true;
                     }
                     if (key.isAcceptable()) {
-                        return accept(map, key);
+                        return accept(stages, key);
                     }
-                    if (key.isReadable() || key.isConnectable()) {
-                        //Внимание!!!
-                        //Важно, чтобы при обработке не было долгоиграющих (например, блокирующих операций),
-                        //поскольку текущий поток занимается диспетчеризацией каналов и должен быть всегда доступен
-                        IStage stage = map.get(key.channel()).proceed(selector, map);
-                        if (stage == null) {
-                            closeChannel((SocketChannel) key.channel());
-                            return true;
-                        }
+
+                    if (key.isWritable()) {
+                        stages.get(key.channel()).proceed(SelectionKey.OP_WRITE, selector, stages);
+                        return true;
+                    }
+
+                    if (key.isConnectable()) {
+                        stages.get(key.channel()).proceed(SelectionKey.OP_CONNECT, selector, stages);
+                        return true;
+                    }
+
+                    if (key.isReadable()) {
+                        stages.get(key.channel()).proceed(SelectionKey.OP_READ, selector, stages);
                         return true;
                     }
                     return true;
                 });
-                //удаление закрытых каналов из списка обрабатываемых
-                map.keySet().removeIf(channel -> !channel.isOpen());
+                stages.keySet().removeIf(channel -> !channel.isOpen());
             }
 
         } catch (IOException e) {
-            LogUtils.logException("Unexpected error on processing incoming connection", e);
+            LogUtils.logException("Unexpected error", e);
         }
     }
 
-    private static boolean accept(Map<SocketChannel, IStage> map, SelectionKey key) {
+    private static boolean accept(Map<SocketChannel, IStage> channelsMap, SelectionKey key) {
         ServerSocketChannel serverChannel = (ServerSocketChannel) key.channel();
         SocketChannel channel = null;
         try {
             System.out.print("Accepting ");
-            channel = serverChannel.accept(); //non-blocking call
+            channel = serverChannel.accept();
             System.out.print(channel.getRemoteAddress());
             channel.configureBlocking(false);
             channel.register(key.selector(), SelectionKey.OP_READ);
-            map.put(channel, new AuthMethodStage(channel));
-            System.out.println(" is accepted");
+            channelsMap.put(channel, new AuthMethodReadStage(channel, ByteBuffer.allocate(BUFFER_SIZE)));
+            System.out.println(": accepted");
         } catch (IOException e) {
-            System.out.println(" is not accepted");
+            System.out.println(": not accepted");
             LogUtils.logException("Failed to process channel " + channel, e);
             if (channel != null) {
                 closeChannel(channel);

@@ -1,4 +1,4 @@
-package edu.technopolis.advancedjava.season2.stages;
+package edu.technopolis.advancedjava.season2.stages.stages;
 
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
